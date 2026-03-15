@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+    <h1 class="page-title" style="margin:0;">Agenda de Entregas</h1>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <a href="/agenda/?mes={{ mes_anterior }}" class="btn btn-ghost btn-sm">← Mês anterior</a>
+        <span class="badge badge-purple" style="padding:6px 14px;">{{ mes_data|date:"F/Y" }}</span>
+        <a href="/agenda/?mes={{ mes_seguinte }}" class="btn btn-ghost btn-sm">Próximo mês →</a>
+        <a href="/pedidos/novo/" class="btn">+ Novo pedido</a>
+    </div>
+</div>
+
+<div class="card" style="padding:16px;">
+    <div style="display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:8px; margin-bottom:8px;">
+        <div style="font-size:0.78rem; font-weight:700; color:#6b7280; text-transform:uppercase; text-align:center;">Dom</div>
+        <div style="font-size:0.78rem; font-weight:700; color:#6b7280; text-transform:uppercase; text-align:center;">Seg</div>
+        <div style="font-size:0.78rem; font-weight:700; color:#6b7280; text-transform:uppercase; text-align:center;">Ter</div>
+        <div style="font-size:0.78rem; font-weight:700; color:#6b7280; text-transform:uppercase; text-align:center;">Qua</div>
+        <div style="font-size:0.78rem; font-weight:700; color:#6b7280; text-transform:uppercase; text-align:center;">Qui</div>
+        <div style="font-size:0.78rem; font-weight:700; color:#6b7280; text-transform:uppercase; text-align:center;">Sex</div>
+        <div style="font-size:0.78rem; font-weight:700; color:#6b7280; text-transform:uppercase; text-align:center;">Sab</div>
+    </div>
+
+    {% for semana in semanas %}
+    <div style="display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:8px; margin-bottom:8px;">
+        {% for dia in semana %}
+        <div style="min-height:130px; border:1px solid #ede9fe; border-radius:10px; padding:8px; background:{% if dia.no_mes %}#ffffff{% else %}#faf9ff{% endif %};">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-size:0.82rem; font-weight:700; color:{% if dia.hoje %}#7c3aed{% elif dia.no_mes %}#374151{% else %}#9ca3af{% endif %};">
+                    {{ dia.data|date:"d" }}
+                </span>
+                {% if dia.pedidos|length > 0 %}
+                <span class="badge badge-purple" style="padding:2px 8px;">{{ dia.pedidos|length }}</span>
+                {% endif %}
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:5px;">
+                {% for p in dia.pedidos %}
+                <a href="/pedidos/{{ p.id }}/" style="text-decoration:none; padding:6px; border-radius:8px; background:#f3f0ff; border:1px solid #ede9fe;">
+                    <div style="font-size:0.76rem; font-weight:700; color:#4c1d95;">#{{ p.id }} {{ p.cliente.nome|truncatechars:14 }}</div>
+                    <div style="font-size:0.72rem; color:#6b7280;">{{ p.status }} · R$ {{ p.total_com_entrega|floatformat:2 }}</div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

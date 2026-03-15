@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="margin-bottom:20px;">
+    <a href="/produtos/" class="btn btn-ghost btn-sm">← Voltar para produtos</a>
+</div>
+
+<h1 class="page-title">Editar Produto</h1>
+
+<div class="card">
+    <h2>Dados do produto</h2>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Nome do produto</label>
+                <input name="nome" value="{{ produto.nome }}" required>
+            </div>
+            <div class="form-group" style="max-width:220px;">
+                <label>Preço de venda (R$)</label>
+                <input name="preco" type="number" step="0.01" min="0" value="{{ produto.preco_venda }}" required>
+            </div>
+            <div class="form-group" style="max-width:280px;">
+                <label>Nova imagem (opcional)</label>
+                <input name="imagem" type="file" accept="image/*">
+            </div>
+        </div>
+
+        {% if produto.imagem %}
+        <div style="margin-top:10px; margin-bottom:12px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+            <img src="{{ produto.imagem.url }}" alt="{{ produto.nome }}" style="width:180px; height:120px; object-fit:cover; border-radius:10px; border:1px solid #ede9fe;">
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; color:#4b5563;">
+                <input type="checkbox" name="remover_imagem" style="width:auto;"> Remover imagem atual
+            </label>
+        </div>
+        {% endif %}
+
+        <div class="divider"></div>
+        <button type="submit">Salvar alterações</button>
+    </form>
+</div>
+{% endblock %}

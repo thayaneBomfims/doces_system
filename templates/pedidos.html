@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+    <h1 class="page-title" style="margin:0;">Pedidos</h1>
+    <a href="/pedidos/novo/" class="btn">+ Novo pedido</a>
+</div>
+
+<div class="card" style="padding:16px 24px;">
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <span style="font-size:0.82rem; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:.5px;">Filtrar:</span>
+        <a href="/pedidos/" style="text-decoration:none; padding:5px 14px; cursor:pointer; border-radius:20px; font-size:0.78rem; font-weight:600; {% if not status_filter %}background:#ede9fe; color:#6d28d9;{% else %}background:#f3f4f6; color:#4b5563;{% endif %}">Todos</a>
+        {% for s in status_choices %}
+        <a href="/pedidos/?status={{ s }}" style="text-decoration:none; padding:5px 14px; cursor:pointer; border-radius:20px; font-size:0.78rem; font-weight:600; {% if status_filter == s %}background:#ede9fe; color:#6d28d9;{% else %}background:#f3f4f6; color:#4b5563;{% endif %}">{{ s }}</a>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card">
+    {% if pedidos %}
+    <table>
+        <thead><tr><th>#</th><th>Cliente</th><th>Entrega</th><th>Itens</th><th>Total</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+            {% for p in pedidos %}
+            <tr>
+                <td style="font-weight:700; color:#7c3aed;">#{{ p.id }}</td>
+                <td><div style="font-weight:600;">{{ p.cliente.nome }}</div><div style="font-size:0.8rem; color:#9ca3af;">{{ p.cliente.telefone }}</div></td>
+                <td><div style="font-weight:600;">{{ p.data_entrega }}</div>{% if p.cliente.endereco %}<div style="font-size:0.8rem; color:#9ca3af;">{{ p.cliente.endereco }}</div>{% endif %}</td>
+                <td>{{ p.itempedido_set.count }} produto(s)</td>
+                <td style="font-weight:700;">R$ {{ p.total_com_entrega|floatformat:2 }}</td>
+                <td><span class="badge {{ p.status_badge_class }}">{{ p.status }}</span></td>
+                <td><a href="/pedidos/{{ p.id }}/" class="btn btn-ghost btn-sm">Ver</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">Nenhum pedido encontrado. <a href="/pedidos/novo/" style="color:#7c3aed; font-weight:600;">Criar primeiro pedido →</a></div>
+    {% endif %}
+</div>
+{% endblock %}

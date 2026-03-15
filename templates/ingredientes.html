@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="page-title">Ingredientes</h1>
+
+<div class="card">
+    <h2>Nova matéria-prima</h2>
+        <p style="font-size:0.83rem; color:#9ca3af; margin-bottom:12px;">
+        Estoque e atualizado automaticamente pelas compras e pela aprovacao de baixa nos pedidos.
+        Aqui voce pode informar somente o estoque inicial.
+        </p>
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-row">
+            <div class="form-group">
+                <label>Item</label>
+                <input name="nome" placeholder="Ex: Leite Ninho, Chocolate...">
+            </div>
+            <div class="form-group" style="max-width:220px;">
+                <label>Valor do pacote (R$)</label>
+                <input name="valor_pacote" type="number" step="0.01" min="0" placeholder="0,00" required>
+            </div>
+            <div class="form-group" style="max-width:220px;">
+                <label>Gramas por unidade</label>
+                <input name="gramas_por_unidade" type="number" step="0.01" min="0" placeholder="Ex: 400" required>
+            </div>
+            <div class="form-group" style="max-width:220px;">
+                <label>Estoque inicial (pacotes)</label>
+                <input name="estoque_inicial" type="number" step="0.01" min="0" placeholder="Opcional (ex: 3)">
+            </div>
+            <button type="submit">Salvar</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Ingredientes cadastrados</h2>
+    {% if ingredientes %}
+    <table>
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Valor do pacote</th>
+                <th>Gramas por unidade</th>
+                <th>Custo por grama/unidade</th>
+                <th>Estoque atual (pacotes)</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in ingredientes %}
+            <tr>
+                <td><strong>{{ i.nome }}</strong></td>
+                <td>R$ {{ i.valor_pacote|floatformat:2 }}</td>
+                <td>{{ i.gramas_por_unidade }} g</td>
+                <td><span class="badge badge-purple">R$ {{ i.custo_unitario|floatformat:2 }}</span></td>
+                <td><span class="badge {% if i.estoque_atual > 0 %}badge-green{% else %}badge-red{% endif %}">{{ i.estoque_atual }} pct</span></td>
+                <td>
+                    <form method="post" action="/ingredientes/{{ i.id }}/excluir/" style="display:inline;">
+                        {% csrf_token %}
+                        <button class="btn-danger btn-sm" onclick="return confirm('Excluir ingrediente {{ i.nome }}?')">Excluir</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">Nenhum ingrediente cadastrado ainda.</div>
+    {% endif %}
+</div>
+{% endblock %}

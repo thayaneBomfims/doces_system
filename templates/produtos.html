@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="page-title">Produtos</h1>
+
+<div style="margin-bottom:20px;">
+    <a href="/produto/novo/" class="btn">+ Novo produto</a>
+</div>
+
+<div class="card">
+    <h2>Produtos cadastrados</h2>
+    {% if produtos_data %}
+    <table>
+        <thead>
+            <tr>
+                <th>Nome</th>
+                <th>Preço de venda</th>
+                <th>Custo da receita</th>
+                <th>Margem</th>
+                <th>Receita</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in produtos_data %}
+            <tr>
+                <td><strong>{{ item.produto.nome }}</strong></td>
+                <td><span class="badge badge-pink">R$ {{ item.produto.preco_venda|floatformat:2 }}</span></td>
+                <td>R$ {{ item.custo_receita|floatformat:2 }}</td>
+                <td>
+                    <div style="font-weight:700; color:{% if item.margem_valor >= 0 %}#15803d{% else %}#dc2626{% endif %};">
+                        R$ {{ item.margem_valor|floatformat:2 }}
+                    </div>
+                    {% if item.margem_percentual != None %}
+                    <div style="font-size:0.78rem; color:#6b7280;">{{ item.margem_percentual|floatformat:2 }}%</div>
+                    {% else %}
+                    <div style="font-size:0.78rem; color:#9ca3af;">sem receita</div>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="/produtos/{{ item.produto.id }}/receita" class="btn btn-ghost btn-sm">Ver / editar receita</a>
+                </td>
+                <td>
+                    <a href="/produtos/{{ item.produto.id }}/editar/" class="btn btn-ghost btn-sm" style="margin-right:6px;">Editar dados</a>
+                    <form method="post" action="/produtos/{{ item.produto.id }}/excluir/" style="display:inline;">
+                        {% csrf_token %}
+                        <button class="btn-danger btn-sm" onclick="return confirm('Excluir produto {{ item.produto.nome }}?')">Excluir</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        Nenhum produto cadastrado ainda.
+        <a href="/produto/novo/" style="color:#7c3aed; font-weight:600;">Criar primeiro produto →</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

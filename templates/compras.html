@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="page-title">Compras</h1>
+
+<div class="card">
+    <h2>Registrar nova compra</h2>
+    <form method="post" id="compra-form">
+        {% csrf_token %}
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Local da compra</label>
+                <input name="local" placeholder="Ex: Mercado Central, Atacadão...">
+            </div>
+            <div class="form-group" style="max-width:200px;">
+                <label>Data</label>
+                <input type="date" name="data" value="{{ today }}">
+            </div>
+        </div>
+
+        <div class="divider"></div>
+        <h3>Puxar ingredientes de um produto</h3>
+        <p style="font-size:0.83rem; color:#9ca3af; margin-bottom:12px;">Selecione um produto para adicionar automaticamente todos os ingredientes da receita.</p>
+        <div class="form-row" style="align-items:flex-end;">
+            <div class="form-group">
+                <label>Produto</label>
+                <select id="produto-selector">
+                    <option value="">Selecione um produto...</option>
+                    {% for p in produtos %}
+                    <option value="{{ p.id }}">{{ p.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="button" class="btn-secondary" onclick="carregarIngredientes()">
+                + Carregar ingredientes
+            </button>
+        </div>
+
+        <div class="divider"></div>
+        <h3>Itens da compra</h3>
+        <div class="ingredient-row-header" style="grid-template-columns: 2fr 1fr 1fr 1fr auto;">
+            <span>Ingrediente</span>
+            <span>Quantidade (g)</span>
+            <span>Quantidade (pacotes)</span>
+            <span>Custo total (R$)</span>
+            <span></span>
+        </div>
+        <div id="compra-items"></div>
+        <button type="button" class="btn-ghost btn-sm" onclick="adicionarLinha()" style="margin-top:8px;">
+            + Adicionar ingrediente avulso
+        </button>
+
+        <div class="divider"></div>
+        <button type="submit">Salvar compra</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Histórico de compras</h2>
+    {% if compras %}
+        {% for c in compras %}
+        <details style="margin-bottom:10px; border:1px solid #ede9fe; border-radius:12px; overflow:hidden;">
+            <summary style="padding:14px 18px; cursor:pointer; background:#faf9ff; list-style:none;
+                            display:flex; justify-content:space-between; align-items:center; user-select:none;">
+                <span style="font-weight:600; color:#4c1d95;">
+                    Compra #{{ c.id }}{% if c.local %} — {{ c.local }}{% endif %}
+                </span>
+                <span class="badge badge-purple">{{ c.data }}</span>
+            </summary>
+            <div style="padding:16px 18px;">
+                {% with itens=c.itemcompra_set.all %}
+                {% if itens %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Ingrediente</th>
+                            <th>Quantidade (g)</th>
+                            <th>Quantidade (pacotes)</th>
+                            <th>Custo total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in itens %}
+                        <tr>
+                            <td><strong>{{ item.ingrediente.nome }}</strong></td>
+                            <td>{{ item.quantidade|floatformat:2 }}</td>
+                            <td>{{ item.quantidade_pacotes|floatformat:2 }}</td>
+                            <td>R$ {{ item.custo_total|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p style="color:#9ca3af; font-size:0.88rem;">Nenhum item nesta compra.</p>
+                {% endif %}
+                {% endwith %}
+            </div>
+        </details>
+        {% endfor %}
+    {% else %}
+    <div class="empty-state">Nenhuma compra registrada ainda.</div>
+    {% endif %}
+</div>
+
+<script>
+const receitas = {{ receitas_json|safe }};
+const ingredientes = [
+    {% for i in ingredientes %}{"id": {{ i.id }}, "nome": "{{ i.nome|escapejs }}", "gramas": "{{ i.gramas_por_unidade }}"}{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+function parseNumero(valor) {
+    if (valor === null || valor === undefined) return 0;
+    const normalizado = String(valor).trim().replace(',', '.');
+    const numero = parseFloat(normalizado);
+    return Number.isNaN(numero) ? 0 : numero;
+}
+
+function buildSelect(selectedId) {
+    let opts = '<option value="">Selecione...</option>';
+    ingredientes.forEach(i => {
+        const sel = String(i.id) === String(selectedId) ? ' selected' : '';
+        opts += `<option value="${i.id}"${sel}>${i.nome}</option>`;
+    });
+    return opts;
+}
+
+function getIngredienteData(ingredienteId) {
+    return ingredientes.find(i => String(i.id) === String(ingredienteId));
+}
+
+function syncQuantidade(row, source) {
+    const select = row.querySelector('select[name="ingrediente_id"]');
+    const inputG = row.querySelector('input[name="quantidade_gramas"]');
+    const inputP = row.querySelector('input[name="quantidade_pacotes"]');
+    const ingr = getIngredienteData(select.value);
+    if (!ingr) {
+        return;
+    }
+
+    const gramasUnidade = parseNumero(ingr.gramas || 0);
+    if (!gramasUnidade || gramasUnidade <= 0) {
+        return;
+    }
+
+    const g = parseNumero(inputG.value || 0);
+    const p = parseNumero(inputP.value || 0);
+
+    if (source === 'gramas' && g > 0) {
+        inputP.value = (g / gramasUnidade).toFixed(2);
+    } else if (source === 'pacotes' && p > 0) {
+        inputG.value = (p * gramasUnidade).toFixed(2);
+    }
+}
+
+function adicionarLinha(ingredienteId, quantidade, pacotes) {
+    ingredienteId = ingredienteId || '';
+    quantidade = quantidade || '';
+    pacotes = pacotes || '';
+    const container = document.getElementById('compra-items');
+    const row = document.createElement('div');
+    row.className = 'ingredient-row';
+    row.style.gridTemplateColumns = '2fr 1fr 1fr 1fr auto';
+    row.innerHTML = `
+        <div class="form-group">
+            <select name="ingrediente_id" onchange="syncQuantidade(this.closest('.ingredient-row'), 'ingrediente')">${buildSelect(ingredienteId)}</select>
+        </div>
+        <div class="form-group">
+            <input name="quantidade_gramas" type="number" step="0.01" min="0" value="${quantidade}" placeholder="0" oninput="syncQuantidade(this.closest('.ingredient-row'), 'gramas')">
+        </div>
+        <div class="form-group">
+            <input name="quantidade_pacotes" type="number" step="0.01" min="0" value="${pacotes}" placeholder="0" oninput="syncQuantidade(this.closest('.ingredient-row'), 'pacotes')">
+        </div>
+        <div class="form-group">
+            <input name="custo" type="number" step="0.01" min="0" placeholder="0,00">
+        </div>
+        <button type="button" class="btn-danger" onclick="this.closest('.ingredient-row').remove()">✕</button>
+    `;
+    container.appendChild(row);
+
+    if (ingredienteId && quantidade) {
+        syncQuantidade(row, 'gramas');
+    }
+}
+
+function carregarIngredientes() {
+    const produtoId = document.getElementById('produto-selector').value;
+    if (!produtoId) { alert('Selecione um produto.'); return; }
+    const lista = receitas[produtoId];
+    if (!lista || lista.length === 0) { alert('Este produto não tem receita cadastrada.'); return; }
+    lista.forEach(item => adicionarLinha(item.id, item.quantidade));
+    document.getElementById('produto-selector').value = '';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base_publica.html" %}
+{% block title %}Catálogo{% endblock %}
+
+{% block content %}
+<h1 class="page-title" style="text-align:center;">🍫 Nosso Cardápio</h1>
+<p style="text-align:center; color:#9ca3af; margin-bottom:36px; font-size:.95rem;">Feito com amor e ingredientes de qualidade 💛</p>
+
+{% if produtos %}
+<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:20px;">
+    {% for p in produtos %}
+    <div style="background:white; border-radius:18px; padding:28px 24px; text-align:center;
+                box-shadow:0 1px 3px rgba(0,0,0,.07), 0 4px 20px rgba(168,85,247,.08);
+                border:1px solid rgba(168,85,247,.1); transition:transform .15s, box-shadow .15s;"
+         onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 28px rgba(168,85,247,.18)'"
+         onmouseout="this.style.transform='translateY(0)';this.style.boxShadow=''">
+        {% if p.imagem %}
+        <img src="{{ p.imagem.url }}" alt="{{ p.nome }}" style="width:100%; height:170px; object-fit:cover; border-radius:12px; margin-bottom:12px;">
+        {% else %}
+        <div style="font-size:3rem; margin-bottom:12px;">🍬</div>
+        {% endif %}
+        <div style="font-size:1.05rem; font-weight:800; color:#1e1b4b; margin-bottom:8px;">{{ p.nome }}</div>
+        <div style="font-size:1.3rem; font-weight:900; color:#a855f7;">R$ {{ p.preco_venda|floatformat:2 }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card"><div class="empty-state">Em breve novidades! Em breve atualizaremos nosso cardápio 🎉</div></div>
+{% endif %}
+
+<div class="card" style="margin-top:36px; text-align:center;">
+    <p style="color:#6b7280; font-size:.92rem; line-height:1.7; margin-bottom:16px;">
+        Quer fazer um pedido? Entre em contato pelo WhatsApp ou <a href="/pedido/consulta/" style="color:#a855f7; font-weight:700;">consulte seu pedido</a>.
+    </p>
+</div>
+{% endblock %}

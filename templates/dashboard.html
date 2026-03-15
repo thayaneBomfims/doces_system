@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="page-title">Dashboard</h1>
+
+<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap:20px; margin-bottom:24px;">
+    <a href="/ingredientes/" style="text-decoration:none;">
+        <div class="card" style="text-align:center; padding:32px 20px; cursor:pointer; transition:transform 0.15s, box-shadow 0.15s;"
+             onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 24px rgba(124,58,237,0.15)'"
+             onmouseout="this.style.transform='translateY(0)';this.style.boxShadow=''">
+            <div style="font-size:2.4rem; margin-bottom:10px;">🧂</div>
+            <div style="font-size:1rem; font-weight:700; color:#4c1d95;">Ingredientes</div>
+            <div style="font-size:0.8rem; color:#9ca3af; margin-top:4px;">Matéria-prima</div>
+        </div>
+    </a>
+    <a href="/produto/novo/" style="text-decoration:none;">
+        <div class="card" style="text-align:center; padding:32px 20px; cursor:pointer; transition:transform 0.15s, box-shadow 0.15s;"
+             onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 24px rgba(124,58,237,0.15)'"
+             onmouseout="this.style.transform='translateY(0)';this.style.boxShadow=''">
+            <div style="font-size:2.4rem; margin-bottom:10px;">✨</div>
+            <div style="font-size:1rem; font-weight:700; color:#4c1d95;">Novo Produto</div>
+            <div style="font-size:0.8rem; color:#9ca3af; margin-top:4px;">Cadastrar com receita</div>
+        </div>
+    </a>
+    <a href="/produtos/" style="text-decoration:none;">
+        <div class="card" style="text-align:center; padding:32px 20px; cursor:pointer; transition:transform 0.15s, box-shadow 0.15s;"
+             onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 24px rgba(124,58,237,0.15)'"
+             onmouseout="this.style.transform='translateY(0)';this.style.boxShadow=''">
+            <div style="font-size:2.4rem; margin-bottom:10px;">🍫</div>
+            <div style="font-size:1rem; font-weight:700; color:#4c1d95;">Produtos</div>
+            <div style="font-size:0.8rem; color:#9ca3af; margin-top:4px;">Ver catálogo</div>
+        </div>
+    </a>
+    <a href="/compras/" style="text-decoration:none;">
+        <div class="card" style="text-align:center; padding:32px 20px; cursor:pointer; transition:transform 0.15s, box-shadow 0.15s;"
+             onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 24px rgba(124,58,237,0.15)'"
+             onmouseout="this.style.transform='translateY(0)';this.style.boxShadow=''">
+            <div style="font-size:2.4rem; margin-bottom:10px;">🛒</div>
+            <div style="font-size:1rem; font-weight:700; color:#4c1d95;">Compras</div>
+            <div style="font-size:0.8rem; color:#9ca3af; margin-top:4px;">Registrar entradas</div>
+        </div>
+    </a>
+    <a href="/pedidos/" style="text-decoration:none;">
+        <div class="card" style="text-align:center; padding:32px 20px; cursor:pointer; transition:transform 0.15s, box-shadow 0.15s;"
+             onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 24px rgba(124,58,237,0.15)'"
+             onmouseout="this.style.transform='translateY(0)';this.style.boxShadow=''">
+            <div style="font-size:2.4rem; margin-bottom:10px;">📦</div>
+            <div style="font-size:1rem; font-weight:700; color:#4c1d95;">Pedidos</div>
+            <div style="font-size:0.8rem; color:#9ca3af; margin-top:4px;">Gestão de pedidos</div>
+        </div>
+    </a>
+    <a href="/agenda/" style="text-decoration:none;">
+        <div class="card" style="text-align:center; padding:32px 20px; cursor:pointer; transition:transform 0.15s, box-shadow 0.15s;"
+             onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 24px rgba(124,58,237,0.15)'"
+             onmouseout="this.style.transform='translateY(0)';this.style.boxShadow=''">
+            <div style="font-size:2.4rem; margin-bottom:10px;">📅</div>
+            <div style="font-size:1rem; font-weight:700; color:#4c1d95;">Agenda</div>
+            <div style="font-size:0.8rem; color:#9ca3af; margin-top:4px;">Calendário de entregas</div>
+        </div>
+    </a>
+</div>
+
+<div class="card">
+    <h2>Bem-vinda! 💛</h2>
+    <p style="color:#6b7280; line-height:1.7;">Use os atalhos acima para gerenciar seus ingredientes, cadastrar produtos com receitas e registrar compras.</p>
+</div>
+
+{% if pedidos_hoje or pedidos_pendentes %}
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+    <div class="card" style="text-align:center; padding:28px;">
+        <div style="font-size:2.4rem; font-weight:800; color:#7c3aed;">{{ pedidos_hoje }}</div>
+        <div style="font-size:0.9rem; font-weight:600; color:#6b7280; margin-top:4px;">entregas hoje</div>
+        <a href="/agenda/" class="btn btn-ghost btn-sm" style="margin-top:12px; display:inline-block;">Ver agenda →</a>
+    </div>
+    <div class="card" style="text-align:center; padding:28px;">
+        <div style="font-size:2.4rem; font-weight:800; color:#ec4899;">{{ pedidos_pendentes }}</div>
+        <div style="font-size:0.9rem; font-weight:600; color:#6b7280; margin-top:4px;">pedidos em aberto</div>
+        <a href="/pedidos/" class="btn btn-ghost btn-sm" style="margin-top:12px; display:inline-block;">Ver pedidos →</a>
+    </div>
+</div>
+{% endif %}
+
+{% if estoque_baixo_total > 0 %}
+<div class="card" style="margin-top:20px; border-left:4px solid #f59e0b;">
+    <h2 style="color:#92400e; border-bottom-color:#fde68a;">⚠️ Estoque baixo (até 1 pacote)</h2>
+    <p style="color:#6b7280; margin-bottom:12px;">
+        {{ estoque_baixo_total }} ingrediente(s) com estoque no fim. Faça reposição para evitar falta na produção.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>Ingrediente</th>
+                <th>Estoque atual (pacotes)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in estoque_baixo|slice:":8" %}
+            <tr>
+                <td><strong>{{ i.nome }}</strong></td>
+                <td><span class="badge badge-red">{{ i.estoque_atual|floatformat:2 }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <a href="/compras/" class="btn btn-ghost btn-sm" style="margin-top:12px; display:inline-block;">Ir para compras →</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="page-title">Importar Planilha</h1>
+
+<div class="card">
+    <h2>Importação em lote</h2>
+    <p style="color:#6b7280; margin-bottom:14px;">
+        Envie uma planilha em <strong>.csv</strong> ou <strong>.xlsx</strong> para importar dados de ingredientes ou produtos.
+    </p>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="form-row">
+            <div class="form-group" style="max-width:240px;">
+                <label>Tipo de dado</label>
+                <select name="tipo" required>
+                    <option value="ingredientes">Ingredientes</option>
+                    <option value="produtos">Produtos</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Arquivo da planilha</label>
+                <input type="file" name="arquivo" accept=".csv,.xlsx" required>
+            </div>
+            <button type="submit">Importar</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Colunas esperadas</h2>
+
+    <h3>Ingredientes</h3>
+    <p style="color:#6b7280; margin-bottom:10px;">
+        Aceita as colunas: <strong>item ou nome</strong>, <strong>valor_do_pacote ou valor_pacote</strong>,
+        <strong>gramas_por_unidade</strong>, <strong>estoque_inicial ou estoque</strong>.
+    </p>
+
+    <h3>Produtos</h3>
+    <p style="color:#6b7280; margin-bottom:0;">
+        Aceita as colunas: <strong>produto ou nome</strong>, <strong>preco ou preco_venda</strong>.
+    </p>
+</div>
+{% endblock %}

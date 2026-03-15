@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="margin-bottom:20px;">
+    <a href="/pedidos/" class="btn btn-ghost btn-sm">← Voltar para pedidos</a>
+</div>
+<h1 class="page-title">Novo Pedido</h1>
+
+<form method="post" id="form-pedido">
+{% csrf_token %}
+
+<div class="card">
+    <h2>Dados do cliente</h2>
+    <p style="font-size:0.83rem; color:#9ca3af; margin-bottom:14px;">Se o telefone já estiver cadastrado, os dados serão atualizados.</p>
+    <div class="form-row">
+        <div class="form-group">
+            <label>Telefone (WhatsApp)</label>
+            <input name="cliente_telefone" id="telefone" placeholder="(11) 99999-9999" required>
+        </div>
+        <div class="form-group">
+            <label>Nome do cliente</label>
+            <input name="cliente_nome" id="nome" placeholder="Nome completo" required>
+        </div>
+    </div>
+    <div class="form-group">
+        <label>Endereço de entrega</label>
+        <input name="cliente_endereco" placeholder="Rua, número, bairro...">
+    </div>
+
+    {% if clientes %}
+    <details style="margin-top:14px;">
+        <summary style="cursor:pointer; font-size:0.83rem; color:#7c3aed; font-weight:600;">Selecionar cliente já cadastrado</summary>
+        <div style="margin-top:10px; display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto;">
+            {% for c in clientes %}
+            <button type="button" onclick="preencherCliente('{{ c.telefone|escapejs }}','{{ c.nome|escapejs }}','{{ c.endereco|escapejs }}')"
+                    class="btn btn-ghost btn-sm" style="text-align:left; justify-content:flex-start;">
+                {{ c.nome }} — {{ c.telefone }}
+            </button>
+            {% endfor %}
+        </div>
+    </details>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Dados do pedido</h2>
+    <div class="form-row">
+        <div class="form-group" style="max-width:200px;">
+            <label>Data de entrega</label>
+            <input type="date" name="data_entrega" value="{{ today }}" required>
+        </div>
+        <div class="form-group" style="max-width:200px;">
+            <label>Taxa de entrega (R$)</label>
+            <input type="number" name="taxa_entrega" step="0.01" min="0" value="0" placeholder="0,00">
+        </div>
+    </div>
+    <div class="form-group">
+        <label>Observações</label>
+        <input name="observacoes" placeholder="Ex: Embrulho especial, cor do laço...">
+    </div>
+</div>
+
+<div class="card">
+    <h2>Produtos do pedido</h2>
+    <div class="ingredient-row-header">
+        <span>Produto</span><span>Quantidade</span><span></span>
+    </div>
+    <div id="pedido-items"></div>
+    <button type="button" class="btn-ghost btn-sm" onclick="addItemPedido()" style="margin-top:8px;">+ Adicionar produto</button>
+</div>
+
+<div style="margin-bottom:24px;">
+    <button type="submit">Salvar pedido</button>
+</div>
+</form>
+
+<script>
+const produtos = [
+    {% for p in produtos %}{"id":{{ p.id }},"nome":"{{ p.nome|escapejs }}","preco":"{{ p.preco_venda }}"}{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+function buildProdutoSelect(selId) {
+    let opts = '<option value="">Selecione...</option>';
+    produtos.forEach(p => {
+        const sel = String(p.id) === String(selId) ? ' selected' : '';
+        opts += '<option value="'+p.id+'"'+sel+'>'+p.nome+' — R$ '+p.preco+'</option>';
+    });
+    return opts;
+}
+
+function addItemPedido(prodId, qtd) {
+    const container = document.getElementById('pedido-items');
+    const row = document.createElement('div');
+    row.className = 'ingredient-row';
+    row.style.gridTemplateColumns = '2fr 1fr auto';
+    row.innerHTML = '<div class="form-group"><select name="produto_id">'+buildProdutoSelect(prodId)+'</select></div>'
+        + '<div class="form-group"><input name="quantidade" type="number" min="1" value="'+(qtd||1)+'" placeholder="1"></div>'
+        + '<button type="button" class="btn-danger" onclick="this.closest(\'.ingredient-row\').remove()">✕</button>';
+    container.appendChild(row);
+}
+
+function preencherCliente(tel, nome, end) {
+    document.getElementById('telefone').value = tel;
+    document.getElementById('nome').value = nome;
+}
+
+// Start with one empty row
+addItemPedido();
+</script>
+{% endblock %}
