@@ -10,6 +10,7 @@ import calendar
 import csv
 
 STATUS_CHOICES = ['Pendente', 'Confirmado', 'Em produção', 'Pronto', 'Entregue', 'Cancelado']
+FORMA_PAGAMENTO_CHOICES = ['PIX', 'Dinheiro', 'Cartão de crédito', 'Cartão de débito', 'Transferência', 'Outro']
 
 
 def _normalizar_chave(texto):
@@ -450,6 +451,8 @@ def pedido_novo(request):
             cliente=cliente,
             data_entrega=request.POST['data_entrega'],
             taxa_entrega=request.POST.get('taxa_entrega') or 0,
+            desconto=request.POST.get('desconto') or 0,
+            forma_pagamento=request.POST.get('forma_pagamento') or '',
             observacoes=request.POST.get('observacoes', ''),
             status='Pendente'
         )
@@ -481,6 +484,7 @@ def pedido_novo(request):
         'clientes': clientes,
         'today': date.today(),
         'status_choices': STATUS_CHOICES,
+        'forma_pagamento_choices': FORMA_PAGAMENTO_CHOICES,
     })
 
 
@@ -492,6 +496,12 @@ def pedido_detalhe(request, pedido_id):
         if action == 'status':
             pedido.status = request.POST['status']
             pedido.save()
+        elif action == 'financeiro':
+            pedido.taxa_entrega = request.POST.get('taxa_entrega') or 0
+            pedido.desconto = request.POST.get('desconto') or 0
+            pedido.forma_pagamento = request.POST.get('forma_pagamento') or ''
+            pedido.save()
+            messages.success(request, 'Dados financeiros atualizados.')
         elif action == 'add_item':
             if pedido.baixa_estoque_aprovada:
                 messages.error(request, 'Baixa de estoque já aprovada. Não é possível alterar itens deste pedido.')
@@ -544,6 +554,7 @@ def pedido_detalhe(request, pedido_id):
         'total': total,
         'total_com_entrega': total_com_entrega,
         'status_choices': STATUS_CHOICES,
+        'forma_pagamento_choices': FORMA_PAGAMENTO_CHOICES,
         'estoque_preview': estoque_preview,
         'tem_falta_estoque': len(faltas_estoque) > 0,
     })

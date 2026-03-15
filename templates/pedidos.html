@@ -19,7 +19,7 @@
 <div class="card">
     {% if pedidos %}
     <table>
-        <thead><tr><th>#</th><th>Cliente</th><th>Entrega</th><th>Itens</th><th>Total</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>#</th><th>Cliente</th><th>Entrega</th><th>Itens</th><th>Taxa</th><th>Desconto</th><th>Pagamento</th><th>Total</th><th>Status</th><th></th></tr></thead>
         <tbody>
             {% for p in pedidos %}
             <tr>
@@ -27,6 +27,9 @@
                 <td><div style="font-weight:600;">{{ p.cliente.nome }}</div><div style="font-size:0.8rem; color:#9ca3af;">{{ p.cliente.telefone }}</div></td>
                 <td><div style="font-weight:600;">{{ p.data_entrega }}</div>{% if p.cliente.endereco %}<div style="font-size:0.8rem; color:#9ca3af;">{{ p.cliente.endereco }}</div>{% endif %}</td>
                 <td>{{ p.itempedido_set.count }} produto(s)</td>
+                <td>R$ {{ p.taxa_entrega|floatformat:2 }}</td>
+                <td>R$ {{ p.desconto|floatformat:2 }}</td>
+                <td>{% if p.forma_pagamento %}{{ p.forma_pagamento }}{% else %}<span style="color:#9ca3af;">-</span>{% endif %}</td>
                 <td style="font-weight:700;">R$ {{ p.total_com_entrega|floatformat:2 }}</td>
                 <td><span class="badge {{ p.status_badge_class }}">{{ p.status }}</span></td>
                 <td><a href="/pedidos/{{ p.id }}/" class="btn btn-ghost btn-sm">Ver</a></td>

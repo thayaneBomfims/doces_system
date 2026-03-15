@@ -87,6 +87,8 @@ class Pedido(models.Model):
     data_pedido = models.DateTimeField(auto_now_add=True)
     data_entrega = models.DateField()
     taxa_entrega = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    desconto = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    forma_pagamento = models.CharField(max_length=50, blank=True, default='')
     status = models.CharField(max_length=50, default="Pendente")
     observacoes = models.TextField(blank=True, default='')
     baixa_estoque_aprovada = models.BooleanField(default=False)
@@ -98,7 +100,8 @@ class Pedido(models.Model):
         return sum(i.subtotal() for i in self.itempedido_set.all())
 
     def total_com_entrega(self):
-        return self.total() + self.taxa_entrega
+        total_final = Decimal(self.total()) + Decimal(self.taxa_entrega) - Decimal(self.desconto)
+        return total_final if total_final > 0 else Decimal('0')
 
     def status_badge_class(self):
         return {

@@ -53,6 +53,19 @@
             <label>Taxa de entrega (R$)</label>
             <input type="number" name="taxa_entrega" step="0.01" min="0" value="0" placeholder="0,00">
         </div>
+        <div class="form-group" style="max-width:200px;">
+            <label>Desconto (R$)</label>
+            <input type="number" name="desconto" step="0.01" min="0" value="0" placeholder="0,00">
+        </div>
+        <div class="form-group" style="max-width:220px;">
+            <label>Forma de pagamento</label>
+            <select name="forma_pagamento">
+                <option value="">Selecione...</option>
+                {% for f in forma_pagamento_choices %}
+                <option value="{{ f }}">{{ f }}</option>
+                {% endfor %}
+            </select>
+        </div>
     </div>
     <div class="form-group">
         <label>Observações</label>

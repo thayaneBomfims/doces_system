@@ -73,6 +73,12 @@
         {% if pedido.taxa_entrega %}
         <div style="font-size:.9rem; color:#6b7280;">Entrega: R$ {{ pedido.taxa_entrega|floatformat:2 }}</div>
         {% endif %}
+        {% if pedido.desconto %}
+        <div style="font-size:.9rem; color:#6b7280;">Desconto: - R$ {{ pedido.desconto|floatformat:2 }}</div>
+        {% endif %}
+        {% if pedido.forma_pagamento %}
+        <div style="font-size:.9rem; color:#6b7280;">Forma de pagamento: {{ pedido.forma_pagamento }}</div>
+        {% endif %}
         <div style="padding:10px 20px; background:linear-gradient(135deg,#fdf4ff,#ede9fe); border-radius:10px; font-size:1.1rem; font-weight:900; color:#7c3aed;">
             Total: R$ {{ pedido.total_com_entrega|floatformat:2 }}
         </div>
