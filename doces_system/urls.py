@@ -8,6 +8,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', dashboard),
     path('importar/', importar_planilha),
+    path('exportar/', exportar_planilha),
     path('ingredientes/', ingredientes),
     path('ingredientes/<int:ingrediente_id>/excluir/', ingrediente_excluir),
     path('compras/<int:compra_id>/excluir/', compra_excluir),

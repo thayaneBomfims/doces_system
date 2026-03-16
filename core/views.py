@@ -2,12 +2,13 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from .models import Produto, Receita, Ingrediente, Compra, ItemCompra, Cliente, Pedido, ItemPedido, ItemPedidoConsumo
 import json
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from collections import defaultdict
 from django.core.paginator import Paginator
 from decimal import Decimal, InvalidOperation
 import calendar
 import csv
+from django.http import HttpResponse
 
 STATUS_CHOICES = ['Pendente', 'Confirmado', 'Em produção', 'Pronto', 'Entregue', 'Cancelado']
 FORMA_PAGAMENTO_CHOICES = ['PIX', 'Dinheiro', 'Cartão de crédito', 'Cartão de débito', 'Transferência', 'Outro']
@@ -146,6 +147,352 @@ def importar_planilha(request):
         return redirect('/importar/')
 
     return render(request, 'importar_planilha.html')
+
+
+def _valor_planilha(valor):
+    if isinstance(valor, Decimal):
+        return float(valor)
+    if isinstance(valor, datetime) and valor.tzinfo is not None:
+        return valor.replace(tzinfo=None)
+    return valor
+
+
+def _estilizar_aba_planilha(ws, cabecalhos, tipos_coluna=None, destaque_linhas=None):
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    tipos_coluna = tipos_coluna or {}
+    destaque_linhas = destaque_linhas or {}
+    header_fill = PatternFill(fill_type='solid', fgColor='7C3AED')
+    header_font = Font(color='FFFFFF', bold=True)
+    zebra_fill = PatternFill(fill_type='solid', fgColor='F5F3FF')
+    entregue_fill = PatternFill(fill_type='solid', fgColor='DCFCE7')
+    cancelado_fill = PatternFill(fill_type='solid', fgColor='FEE2E2')
+    thin = Side(border_style='thin', color='DDD6FE')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    ws.freeze_panes = 'A2'
+    ws.auto_filter.ref = ws.dimensions
+
+    for col_idx, cabecalho in enumerate(cabecalhos, start=1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = border
+
+    for row_idx in range(2, ws.max_row + 1):
+        is_even = (row_idx % 2) == 0
+        tipo_destaque = destaque_linhas.get(row_idx)
+        for col_idx, cabecalho in enumerate(cabecalhos, start=1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            cell.border = border
+            cell.alignment = Alignment(vertical='center')
+
+            tipo = tipos_coluna.get(cabecalho)
+            if tipo == 'moeda':
+                cell.number_format = 'R$ #,##0.00'
+                cell.alignment = Alignment(horizontal='right', vertical='center')
+            elif tipo == 'data':
+                cell.number_format = 'DD/MM/YYYY'
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+            elif tipo == 'data_hora':
+                cell.number_format = 'DD/MM/YYYY HH:MM'
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+            elif tipo == 'inteiro':
+                cell.number_format = '0'
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+
+            if tipo_destaque == 'entregue':
+                cell.fill = entregue_fill
+            elif tipo_destaque == 'cancelado':
+                cell.fill = cancelado_fill
+            elif is_even:
+                cell.fill = zebra_fill
+
+    for col_idx, cabecalho in enumerate(cabecalhos, start=1):
+        largura = len(str(cabecalho)) + 4
+        for row_idx in range(2, ws.max_row + 1):
+            valor = ws.cell(row=row_idx, column=col_idx).value
+            if valor is None:
+                continue
+            largura = max(largura, len(str(valor)) + 2)
+        ws.column_dimensions[get_column_letter(col_idx)].width = min(max(largura, 12), 48)
+
+
+def _adicionar_aba_planilha(wb, nome_aba, cabecalhos, linhas, tipos_coluna=None, destaque_linhas=None):
+    ws = wb.create_sheet(title=nome_aba)
+    ws.append(cabecalhos)
+    for linha in linhas:
+        ws.append([_valor_planilha(v) for v in linha])
+    _estilizar_aba_planilha(ws, cabecalhos, tipos_coluna, destaque_linhas)
+
+
+def exportar_planilha(request):
+    try:
+        from openpyxl import Workbook
+    except Exception:
+        messages.error(request, 'Para exportar planilha .xlsx, instale o pacote openpyxl no ambiente Python.')
+        return redirect('/')
+
+    wb = Workbook()
+    wb.remove(wb.active)
+
+    compras = Compra.objects.all().order_by('-data', '-id')
+    itens_pedido = ItemPedido.objects.select_related('pedido', 'produto').order_by('-pedido__data_entrega', '-pedido_id', 'id')
+    pedidos = Pedido.objects.select_related('cliente').order_by('-data_entrega', '-id')
+
+    pedidos_validos = [p for p in pedidos if p.status != 'Cancelado']
+    faturamento_bruto = sum((p.total() for p in pedidos_validos), Decimal('0'))
+    faturamento_liquido = sum((p.total_com_entrega() for p in pedidos_validos), Decimal('0'))
+    custo_total_producao = sum(
+        (item.custo_total_producao() for item in itens_pedido if item.pedido and item.pedido.status != 'Cancelado'),
+        Decimal('0')
+    )
+    lucro_estimado = faturamento_liquido - custo_total_producao
+    total_compras = sum((Decimal(c.total_final) for c in compras), Decimal('0'))
+
+    _adicionar_aba_planilha(
+        wb,
+        'Resumo',
+        ['Indicador', 'Quantidade', 'Valor (R$)'],
+        [
+            ['Pedidos totais', len(pedidos), None],
+            ['Pedidos entregues', len([p for p in pedidos if p.status == 'Entregue']), None],
+            ['Pedidos cancelados', len([p for p in pedidos if p.status == 'Cancelado']), None],
+            ['Compras registradas', len(compras), None],
+            ['Faturamento bruto pedidos validos', None, faturamento_bruto],
+            ['Faturamento com entrega pedidos validos', None, faturamento_liquido],
+            ['Custo total de producao pedidos validos', None, custo_total_producao],
+            ['Total de compras', None, total_compras],
+            ['Lucro estimado', None, lucro_estimado],
+        ],
+        {
+            'Quantidade': 'inteiro',
+            'Valor (R$)': 'moeda',
+        },
+    )
+
+    ingredientes = Ingrediente.objects.all().order_by('nome')
+    _adicionar_aba_planilha(
+        wb,
+        'Ingredientes',
+        ['Ingrediente', 'Ativo', 'Valor pacote (R$)', 'Gramas por unidade', 'Custo por grama (R$)', 'Estoque atual (pacotes)'],
+        [
+            [
+                i.nome,
+                'Sim' if i.ativo else 'Nao',
+                i.valor_pacote,
+                i.gramas_por_unidade,
+                i.custo_unitario,
+                i.estoque_atual,
+            ]
+            for i in ingredientes
+        ],
+        {
+            'Valor pacote (R$)': 'moeda',
+            'Custo por grama (R$)': 'moeda',
+        },
+    )
+
+    produtos = Produto.objects.all().order_by('nome')
+    _adicionar_aba_planilha(
+        wb,
+        'Produtos',
+        ['Produto', 'Preco de venda (R$)', 'Imagem'],
+        [
+            [p.nome, p.preco_venda, p.imagem.name if p.imagem else '']
+            for p in produtos
+        ],
+        {
+            'Preco de venda (R$)': 'moeda',
+        },
+    )
+
+    receitas = Receita.objects.select_related('produto', 'ingrediente').order_by('produto__nome', 'ingrediente__nome')
+    _adicionar_aba_planilha(
+        wb,
+        'Receitas',
+        ['Produto', 'Ingrediente', 'Quantidade (gramas)', 'Custo estimado (R$)'],
+        [
+            [
+                r.produto.nome,
+                r.ingrediente.nome,
+                r.quantidade,
+                r.custo(),
+            ]
+            for r in receitas
+        ],
+        {
+            'Custo estimado (R$)': 'moeda',
+        },
+    )
+
+    _adicionar_aba_planilha(
+        wb,
+        'Compras',
+        ['Data', 'Local', 'Desconto (R$)', 'Frete (R$)', 'Total ingredientes (R$)', 'Total calculado (R$)', 'Total final (R$)'],
+        [
+            [
+                c.data,
+                c.local,
+                c.desconto,
+                c.frete,
+                c.total_ingredientes,
+                c.total_calculado,
+                c.total_final,
+            ]
+            for c in compras
+        ],
+        {
+            'Data': 'data',
+            'Desconto (R$)': 'moeda',
+            'Frete (R$)': 'moeda',
+            'Total ingredientes (R$)': 'moeda',
+            'Total calculado (R$)': 'moeda',
+            'Total final (R$)': 'moeda',
+        },
+    )
+
+    itens_compra = ItemCompra.objects.select_related('compra', 'ingrediente').order_by('-compra__data', '-compra_id', 'id')
+    _adicionar_aba_planilha(
+        wb,
+        'ItensCompra',
+        [
+            'Data da compra',
+            'Local da compra',
+            'Ingrediente',
+            'Quantidade (gramas)',
+            'Quantidade (pacotes)',
+            'Custo unitario (R$)',
+            'Custo total (R$)',
+        ],
+        [
+            [
+                item.compra.data,
+                item.compra.local,
+                item.ingrediente.nome,
+                item.quantidade,
+                item.quantidade_pacotes(),
+                item.custo_unitario_compra,
+                item.custo_total,
+            ]
+            for item in itens_compra
+        ],
+        {
+            'Data da compra': 'data',
+            'Custo unitario (R$)': 'moeda',
+            'Custo total (R$)': 'moeda',
+        },
+    )
+
+    clientes = Cliente.objects.all().order_by('nome')
+    _adicionar_aba_planilha(
+        wb,
+        'Clientes',
+        ['Cliente', 'Telefone', 'Endereco'],
+        [[c.nome, c.telefone, c.endereco] for c in clientes],
+    )
+
+    linhas_pedidos = [
+        [
+            p.id,
+            p.cliente.nome,
+            p.cliente.telefone,
+            p.data_pedido,
+            p.data_entrega,
+            p.taxa_entrega,
+            p.desconto,
+            p.forma_pagamento,
+            p.status,
+            'Sim' if p.baixa_estoque_aprovada else 'Nao',
+            p.total(),
+            p.total_com_entrega(),
+            p.observacoes,
+        ]
+        for p in pedidos
+    ]
+    destaque_linhas_pedidos = {}
+    for idx, p in enumerate(pedidos, start=2):
+        if p.status == 'Entregue':
+            destaque_linhas_pedidos[idx] = 'entregue'
+        elif p.status == 'Cancelado':
+            destaque_linhas_pedidos[idx] = 'cancelado'
+
+    _adicionar_aba_planilha(
+        wb,
+        'Pedidos',
+        [
+            'Pedido ID',
+            'Cliente',
+            'Telefone',
+            'Data do pedido',
+            'Data de entrega',
+            'Taxa de entrega (R$)',
+            'Desconto (R$)',
+            'Forma de pagamento',
+            'Status',
+            'Baixa de estoque aprovada',
+            'Total (R$)',
+            'Total com entrega (R$)',
+            'Observacoes',
+        ],
+        linhas_pedidos,
+        {
+            'Pedido ID': 'inteiro',
+            'Data do pedido': 'data_hora',
+            'Data de entrega': 'data',
+            'Taxa de entrega (R$)': 'moeda',
+            'Desconto (R$)': 'moeda',
+            'Total (R$)': 'moeda',
+            'Total com entrega (R$)': 'moeda',
+        },
+        destaque_linhas_pedidos,
+    )
+
+    _adicionar_aba_planilha(
+        wb,
+        'ItensPedido',
+        [
+            'Data de entrega',
+            'Pedido ID',
+            'Produto',
+            'Quantidade',
+            'Preco unitario (R$)',
+            'Subtotal (R$)',
+            'Custo unitario producao (R$)',
+            'Custo total producao (R$)',
+        ],
+        [
+            [
+                item.pedido.data_entrega,
+                item.pedido_id,
+                item.nome_produto(),
+                item.quantidade,
+                item.preco_unitario,
+                item.subtotal(),
+                item.custo_unitario_producao,
+                item.custo_total_producao(),
+            ]
+            for item in itens_pedido
+        ],
+        {
+            'Data de entrega': 'data',
+            'Pedido ID': 'inteiro',
+            'Preco unitario (R$)': 'moeda',
+            'Subtotal (R$)': 'moeda',
+            'Custo unitario producao (R$)': 'moeda',
+            'Custo total producao (R$)': 'moeda',
+        },
+    )
+
+    nome_arquivo = f"dados_doces_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{nome_arquivo}"'
+    wb.save(response)
+    return response
 
 
 def calcular_necessidades_pedido(pedido):
