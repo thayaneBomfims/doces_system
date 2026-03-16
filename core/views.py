@@ -1,16 +1,33 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from .models import Produto, Receita, Ingrediente, Compra, ItemCompra, Cliente, Pedido, ItemPedido
+from .models import Produto, Receita, Ingrediente, Compra, ItemCompra, Cliente, Pedido, ItemPedido, ItemPedidoConsumo
 import json
 from datetime import date, timedelta
 from collections import defaultdict
 from django.core.paginator import Paginator
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import calendar
 import csv
 
 STATUS_CHOICES = ['Pendente', 'Confirmado', 'Em produção', 'Pronto', 'Entregue', 'Cancelado']
 FORMA_PAGAMENTO_CHOICES = ['PIX', 'Dinheiro', 'Cartão de crédito', 'Cartão de débito', 'Transferência', 'Outro']
+
+
+def _calcular_custo_unitario_produto(produto):
+    receitas = Receita.objects.filter(produto=produto).select_related('ingrediente')
+    return sum((Decimal(r.quantidade) * Decimal(r.ingrediente.custo_unitario) for r in receitas), Decimal('0'))
+
+
+def _registrar_snapshot_consumo_item(item_pedido):
+    ItemPedidoConsumo.objects.filter(item_pedido=item_pedido).delete()
+    receitas = Receita.objects.filter(produto=item_pedido.produto).select_related('ingrediente')
+    for receita in receitas:
+        ItemPedidoConsumo.objects.create(
+            item_pedido=item_pedido,
+            ingrediente=receita.ingrediente,
+            ingrediente_nome=receita.ingrediente.nome,
+            quantidade_por_unidade=receita.quantidade,
+        )
 
 
 def _normalizar_chave(texto):
@@ -89,6 +106,7 @@ def importar_planilha(request):
                     continue
 
                 ingrediente, created = Ingrediente.objects.get_or_create(nome=str(nome).strip())
+                ingrediente.ativo = True
                 ingrediente.valor_pacote = valor_pacote or 0
                 ingrediente.gramas_por_unidade = gramas or 0
                 if estoque_inicial not in (None, ''):
@@ -132,8 +150,16 @@ def importar_planilha(request):
 
 def calcular_necessidades_pedido(pedido):
     totais = defaultdict(lambda: Decimal('0'))
-    itens = ItemPedido.objects.filter(pedido=pedido).select_related('produto')
+    itens = ItemPedido.objects.filter(pedido=pedido).select_related('produto').prefetch_related('itempedidoconsumo_set')
     for item in itens:
+        consumos = list(item.itempedidoconsumo_set.all())
+        if consumos:
+            for consumo in consumos:
+                if consumo.ingrediente_id:
+                    totais[consumo.ingrediente_id] += Decimal(consumo.quantidade_por_unidade) * Decimal(item.quantidade)
+            continue
+
+        # Fallback para itens legados sem snapshot.
         receitas = Receita.objects.filter(produto=item.produto).select_related('ingrediente')
         for r in receitas:
             totais[r.ingrediente_id] += Decimal(r.quantidade) * Decimal(item.quantidade)
@@ -173,7 +199,7 @@ def dashboard(request):
     hoje = date.today()
     pedidos_hoje = Pedido.objects.filter(data_entrega=hoje).count()
     pedidos_pendentes = Pedido.objects.filter(status__in=['Pendente', 'Confirmado', 'Em produção']).count()
-    estoque_baixo = Ingrediente.objects.filter(estoque_atual__lte=1).order_by('estoque_atual', 'nome')
+    estoque_baixo = Ingrediente.objects.filter(ativo=True, estoque_atual__lte=1).order_by('estoque_atual', 'nome')
     return render(request, "dashboard.html", {
         'pedidos_hoje': pedidos_hoje,
         'pedidos_pendentes': pedidos_pendentes,
@@ -184,14 +210,32 @@ def dashboard(request):
 
 def ingredientes(request):
     if request.method == "POST":
+        action = request.POST.get("action", "create")
+
+        if action == 'edit_price':
+            ingrediente_id = request.POST.get('ingrediente_id')
+            ingrediente = Ingrediente.objects.filter(id=ingrediente_id, ativo=True).first()
+            if not ingrediente:
+                messages.error(request, 'Ingrediente não encontrado para edição.')
+                return redirect('/ingredientes/')
+
+            ingrediente.valor_pacote = request.POST.get('valor_pacote') or ingrediente.valor_pacote
+            ingrediente.save()
+            messages.success(request, f'Preço de "{ingrediente.nome}" atualizado com sucesso.')
+            return redirect('/ingredientes/')
+
         estoque_inicial = request.POST.get("estoque_inicial") or 0
         Ingrediente.objects.create(
             nome=request.POST["nome"],
+            ativo=True,
             valor_pacote=request.POST["valor_pacote"],
             gramas_por_unidade=request.POST["gramas_por_unidade"],
             estoque_atual=estoque_inicial,
         )
-    lista = Ingrediente.objects.all()
+        messages.success(request, 'Ingrediente cadastrado com sucesso.')
+        return redirect('/ingredientes/')
+
+    lista = Ingrediente.objects.filter(ativo=True).order_by('nome')
     return render(request, "ingredientes.html", {"ingredientes": lista})
 
 
@@ -199,19 +243,44 @@ def ingrediente_excluir(request, ingrediente_id):
     if request.method != "POST":
         return redirect('/ingredientes/')
 
-    ingrediente = Ingrediente.objects.filter(id=ingrediente_id).first()
+    ingrediente = Ingrediente.objects.filter(id=ingrediente_id, ativo=True).first()
     if not ingrediente:
         messages.error(request, 'Ingrediente não encontrado.')
         return redirect('/ingredientes/')
 
-    if Receita.objects.filter(ingrediente=ingrediente).exists() or ItemCompra.objects.filter(ingrediente=ingrediente).exists():
-        messages.error(request, 'Não é possível excluir: ingrediente já está em receita ou compras.')
-        return redirect('/ingredientes/')
-
     nome = ingrediente.nome
-    ingrediente.delete()
-    messages.success(request, f'Ingrediente "{nome}" removido com sucesso.')
+    ingrediente.ativo = False
+    ingrediente.save(update_fields=['ativo'])
+    messages.success(request, f'Ingrediente "{nome}" removido do cadastro sem apagar o histórico.')
     return redirect('/ingredientes/')
+
+
+def compra_excluir(request, compra_id):
+    if request.method != "POST":
+        return redirect('/compras/')
+
+    compra = Compra.objects.filter(id=compra_id).prefetch_related('itemcompra_set__ingrediente').first()
+    if not compra:
+        messages.error(request, 'Compra não encontrada.')
+        return redirect('/compras/')
+
+    for item in compra.itemcompra_set.all():
+        ingrediente = item.ingrediente
+        if not ingrediente:
+            continue
+
+        pacotes = Decimal(item.quantidade_pacotes_registrada or 0)
+        if pacotes <= 0:
+            gramas_unidade = Decimal(ingrediente.gramas_por_unidade or 0)
+            if gramas_unidade > 0:
+                pacotes = Decimal(item.quantidade) / gramas_unidade
+
+        ingrediente.estoque_atual = Decimal(ingrediente.estoque_atual) - pacotes
+        ingrediente.save()
+
+    compra.delete()
+    messages.success(request, 'Compra excluída com sucesso.')
+    return redirect('/compras/')
 
 
 # 🍫 NOVO PRODUTO + RECEITA INLINE
@@ -223,7 +292,7 @@ def produto_novo(request):
             preco_venda=request.POST["preco"],
             imagem=request.FILES.get("imagem")
         )
-        for ingr in Ingrediente.objects.all():
+        for ingr in Ingrediente.objects.filter(ativo=True):
             val = request.POST.get(f"qtd_{ingr.id}", "").strip()
             if val:
                 try:
@@ -234,7 +303,7 @@ def produto_novo(request):
                     pass
         return redirect('/produtos/')
     ingredientes_q = request.GET.get("q", "").strip()
-    ingredientes_qs = Ingrediente.objects.all().order_by("nome")
+    ingredientes_qs = Ingrediente.objects.filter(ativo=True).order_by("nome")
     if ingredientes_q:
         ingredientes_qs = ingredientes_qs.filter(nome__icontains=ingredientes_q)
     paginator = Paginator(ingredientes_qs, 12)
@@ -306,9 +375,17 @@ def produto_excluir(request, produto_id):
         messages.error(request, 'Produto não encontrado.')
         return redirect('/produtos/')
 
-    if ItemPedido.objects.filter(produto=produto).exists():
-        messages.error(request, 'Não é possível excluir: produto já possui pedidos vinculados.')
+    itens_vinculados = ItemPedido.objects.filter(produto=produto).select_related('pedido')
+    itens_bloqueantes = itens_vinculados.exclude(pedido__status__in=['Entregue', 'Cancelado'])
+    if itens_bloqueantes.exists():
+        messages.error(
+            request,
+            'Não é possível excluir: este produto possui pedidos em andamento (apenas Entregue/Cancelado permitem exclusão).'
+        )
         return redirect('/produtos/')
+
+    if itens_vinculados.exists():
+        itens_vinculados.update(produto_nome=produto.nome, produto=None)
 
     nome = produto.nome
     produto.delete()
@@ -321,11 +398,23 @@ def produto_excluir(request, produto_id):
 def receita_produto(request, produto_id):
     produto = Produto.objects.get(id=produto_id)
     if request.method == "POST":
+        action = request.POST.get('action', 'add')
+        if action == 'remove':
+            receita = Receita.objects.filter(id=request.POST.get('receita_id'), produto=produto).first()
+            if not receita:
+                messages.error(request, 'Ingrediente da receita não encontrado.')
+                return redirect(f'/produtos/{produto_id}/receita')
+            receita.delete()
+            messages.success(request, 'Ingrediente removido da receita com sucesso.')
+            return redirect(f'/produtos/{produto_id}/receita')
+
         Receita.objects.create(
             produto=produto,
             ingrediente_id=request.POST["ingrediente"],
             quantidade=request.POST["quantidade"]
         )
+        messages.success(request, 'Ingrediente adicionado na receita.')
+        return redirect(f'/produtos/{produto_id}/receita')
 
     ingrediente_q = request.GET.get("ingrediente_q", "").strip()
     receitas = Receita.objects.filter(produto=produto).select_related("ingrediente")
@@ -335,7 +424,7 @@ def receita_produto(request, produto_id):
     paginator = Paginator(receitas.order_by("ingrediente__nome"), 10)
     page_obj = paginator.get_page(request.GET.get("page"))
 
-    ingredientes = Ingrediente.objects.all()
+    ingredientes = Ingrediente.objects.filter(ativo=True).order_by('nome')
     custo_total = sum(r.custo() for r in Receita.objects.filter(produto=produto).select_related("ingrediente"))
     return render(request, "receita.html", {
         "produto": produto,
@@ -352,19 +441,32 @@ def compras(request):
     if request.method == "POST":
         data_str = request.POST.get("data") or str(date.today())
         local = request.POST.get("local", "")
-        compra = Compra.objects.create(data=data_str, local=local)
+        try:
+            desconto = Decimal(str(request.POST.get("desconto") or 0))
+        except (InvalidOperation, TypeError, ValueError):
+            desconto = Decimal('0')
+        try:
+            frete = Decimal(str(request.POST.get("frete") or 0))
+        except (InvalidOperation, TypeError, ValueError):
+            frete = Decimal('0')
+        total_final_informado = request.POST.get("total_final", "").strip()
+        compra = Compra.objects.create(
+            data=data_str,
+            local=local,
+            desconto=desconto,
+            frete=frete,
+        )
 
         ingrediente_ids = request.POST.getlist("ingrediente_id")
-        quantidades_gramas = request.POST.getlist("quantidade_gramas")
         quantidades_pacotes = request.POST.getlist("quantidade_pacotes")
-        custos = request.POST.getlist("custo")
+        custos_unitarios = request.POST.getlist("custo_unitario")
 
+        total_ingredientes = Decimal('0')
         for i, ingr_id in enumerate(ingrediente_ids):
             if not ingr_id:
                 continue
-            qtd_g = quantidades_gramas[i] if i < len(quantidades_gramas) else "0"
             qtd_p = quantidades_pacotes[i] if i < len(quantidades_pacotes) else "0"
-            cst = custos[i] if i < len(custos) else "0"
+            cst_unit = custos_unitarios[i] if i < len(custos_unitarios) else "0"
 
             try:
                 ingrediente = Ingrediente.objects.filter(id=ingr_id).first()
@@ -372,37 +474,65 @@ def compras(request):
                     continue
 
                 gramas_unidade = Decimal(ingrediente.gramas_por_unidade or 0)
-                qtd_gramas_dec = Decimal(str(qtd_g or 0))
                 qtd_pacotes_dec = Decimal(str(qtd_p or 0))
+                custo_unitario_compra = Decimal(str(cst_unit or 0))
 
-                if qtd_gramas_dec <= 0 and qtd_pacotes_dec > 0 and gramas_unidade > 0:
-                    qtd_gramas_dec = qtd_pacotes_dec * gramas_unidade
+                if qtd_pacotes_dec > 0 and custo_unitario_compra >= 0:
+                    qtd_gramas_dec = qtd_pacotes_dec * gramas_unidade if gramas_unidade > 0 else Decimal('0')
+                    custo_total_item = qtd_pacotes_dec * custo_unitario_compra
 
-                if qtd_gramas_dec > 0:
                     item = ItemCompra.objects.create(
                         compra=compra,
                         ingrediente=ingrediente,
                         quantidade=qtd_gramas_dec,
-                        custo_total=cst or 0
+                        custo_unitario_compra=custo_unitario_compra,
+                        custo_total=custo_total_item,
+                        quantidade_pacotes_registrada=qtd_pacotes_dec,
                     )
+                    total_ingredientes += custo_total_item
 
                     if gramas_unidade > 0:
                         pacotes_entrada = Decimal(item.quantidade) / gramas_unidade
                         ingrediente.estoque_atual = Decimal(ingrediente.estoque_atual) + pacotes_entrada
-                        ingrediente.save()
+                    else:
+                        ingrediente.estoque_atual = Decimal(ingrediente.estoque_atual) + qtd_pacotes_dec
+
+                    # A última compra define o valor do pacote para custos futuros.
+                    ingrediente.valor_pacote = custo_unitario_compra
+                    ingrediente.save()
             except ValueError:
                 pass
             except Exception:
                 pass
 
-    ingredientes = Ingrediente.objects.all()
+        total_calculado = total_ingredientes + frete - desconto
+        if total_calculado < 0:
+            total_calculado = Decimal('0')
+
+        try:
+            total_final = Decimal(str(total_final_informado)) if total_final_informado else total_calculado
+        except (InvalidOperation, TypeError, ValueError):
+            total_final = total_calculado
+
+        compra.total_ingredientes = total_ingredientes
+        compra.total_calculado = total_calculado
+        compra.total_final = total_final
+        compra.save(update_fields=['total_ingredientes', 'total_calculado', 'total_final'])
+
+    ingredientes = Ingrediente.objects.filter(ativo=True).order_by('nome')
     produtos = Produto.objects.all()
 
     receitas_por_produto = {}
     for produto in produtos:
         receitas = Receita.objects.filter(produto=produto).select_related('ingrediente')
         receitas_por_produto[str(produto.id)] = [
-            {'id': r.ingrediente.id, 'nome': r.ingrediente.nome, 'quantidade': float(r.quantidade)}
+            {
+                'id': r.ingrediente.id,
+                'nome': r.ingrediente.nome,
+                'pacotes_sugeridos': float(
+                    Decimal(r.quantidade) / Decimal(r.ingrediente.gramas_por_unidade)
+                ) if Decimal(r.ingrediente.gramas_por_unidade or 0) > 0 else 0
+            }
             for r in receitas
         ]
 
@@ -466,12 +596,16 @@ def pedido_novo(request):
                 qtd = int(quantidades[i]) if i < len(quantidades) else 1
                 if qtd > 0:
                     produto = Produto.objects.get(id=pid)
-                    ItemPedido.objects.create(
+                    custo_unitario_producao = _calcular_custo_unitario_produto(produto)
+                    item_pedido = ItemPedido.objects.create(
                         pedido=pedido,
                         produto=produto,
+                        produto_nome=produto.nome,
                         quantidade=qtd,
-                        preco_unitario=produto.preco_venda
+                        preco_unitario=produto.preco_venda,
+                        custo_unitario_producao=custo_unitario_producao,
                     )
+                    _registrar_snapshot_consumo_item(item_pedido)
             except (ValueError, Produto.DoesNotExist):
                 pass
 
@@ -508,12 +642,16 @@ def pedido_detalhe(request, pedido_id):
                 return redirect(f'/pedidos/{pedido_id}/')
             try:
                 produto = Produto.objects.get(id=request.POST['produto_id'])
-                ItemPedido.objects.create(
+                custo_unitario_producao = _calcular_custo_unitario_produto(produto)
+                item_pedido = ItemPedido.objects.create(
                     pedido=pedido,
                     produto=produto,
+                    produto_nome=produto.nome,
                     quantidade=int(request.POST['quantidade']),
-                    preco_unitario=produto.preco_venda
+                    preco_unitario=produto.preco_venda,
+                    custo_unitario_producao=custo_unitario_producao,
                 )
+                _registrar_snapshot_consumo_item(item_pedido)
             except (Produto.DoesNotExist, ValueError):
                 pass
         elif action == 'remove_item':
@@ -558,6 +696,27 @@ def pedido_detalhe(request, pedido_id):
         'estoque_preview': estoque_preview,
         'tem_falta_estoque': len(faltas_estoque) > 0,
     })
+
+
+def pedido_excluir(request, pedido_id):
+    if request.method != "POST":
+        return redirect('/pedidos/')
+
+    pedido = Pedido.objects.filter(id=pedido_id).first()
+    if not pedido:
+        messages.error(request, 'Pedido não encontrado.')
+        return redirect('/pedidos/')
+
+    if pedido.baixa_estoque_aprovada:
+        preview = calcular_necessidades_pedido(pedido)
+        for p in preview:
+            ingrediente = p['ingrediente']
+            ingrediente.estoque_atual = Decimal(ingrediente.estoque_atual) + Decimal(p['necessario_pacotes'])
+            ingrediente.save()
+
+    pedido.delete()
+    messages.success(request, 'Pedido excluído com sucesso.')
+    return redirect('/pedidos/')
 
 
 # 📅 AGENDA

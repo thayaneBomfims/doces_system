@@ -10,6 +10,7 @@ urlpatterns = [
     path('importar/', importar_planilha),
     path('ingredientes/', ingredientes),
     path('ingredientes/<int:ingrediente_id>/excluir/', ingrediente_excluir),
+    path('compras/<int:compra_id>/excluir/', compra_excluir),
     path('produto/novo/', produto_novo),
     path('produtos/', produtos),
     path('produtos/<int:produto_id>/editar/', produto_editar),
@@ -20,6 +21,7 @@ urlpatterns = [
     path('pedidos/', pedidos),
     path('pedidos/novo/', pedido_novo),
     path('pedidos/<int:pedido_id>/', pedido_detalhe),
+    path('pedidos/<int:pedido_id>/excluir/', pedido_excluir),
     # Agenda
     path('agenda/', agenda),
     # Público

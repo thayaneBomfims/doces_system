@@ -1,8 +1,13 @@
 {% extends "base.html" %}
+{% load l10n %}
 
 {% block content %}
 <div style="margin-bottom:20px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
     <a href="/pedidos/" class="btn btn-ghost btn-sm">← Pedidos</a>
+    <form method="post" action="/pedidos/{{ pedido.id }}/excluir/" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn-danger btn-sm" onclick="return confirm('Excluir pedido #{{ pedido.id }}?');">Excluir pedido</button>
+    </form>
     <span class="badge {{ pedido.status_badge_class }}" style="font-size:0.9rem; padding:6px 16px;">{{ pedido.status }}</span>
     {% if pedido.baixa_estoque_aprovada %}
     <span class="badge badge-green" style="font-size:0.9rem; padding:6px 16px;">Estoque aprovado</span>
@@ -47,11 +52,11 @@
         <input type="hidden" name="action" value="financeiro">
         <div class="form-group" style="margin-bottom:10px;">
             <label>Taxa de entrega (R$)</label>
-            <input type="number" name="taxa_entrega" step="0.01" min="0" value="{{ pedido.taxa_entrega|floatformat:2 }}">
+            <input type="number" name="taxa_entrega" step="0.01" min="0" value="{{ pedido.taxa_entrega|unlocalize }}">
         </div>
         <div class="form-group" style="margin-bottom:10px;">
             <label>Desconto (R$)</label>
-            <input type="number" name="desconto" step="0.01" min="0" value="{{ pedido.desconto|floatformat:2 }}">
+            <input type="number" name="desconto" step="0.01" min="0" value="{{ pedido.desconto|unlocalize }}">
         </div>
         <div class="form-group" style="margin-bottom:12px;">
             <label>Forma de pagamento</label>
@@ -76,7 +81,7 @@
         <tbody>
             {% for item in itens %}
             <tr>
-                <td><strong>{{ item.produto.nome }}</strong></td>
+                <td><strong>{{ item.nome_produto }}</strong></td>
                 <td>{{ item.quantidade }}</td>
                 <td>R$ {{ item.preco_unitario|floatformat:2 }}</td>
                 <td style="font-weight:700;">R$ {{ item.subtotal|floatformat:2 }}</td>

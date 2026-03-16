@@ -48,6 +48,7 @@
                 <th>Ingrediente</th>
                 <th>Quantidade (g)</th>
                 <th>Custo</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
@@ -56,6 +57,14 @@
                 <td><strong>{{ r.ingrediente.nome }}</strong></td>
                 <td>{{ r.quantidade }} g</td>
                 <td>R$ {{ r.custo|floatformat:2 }}</td>
+                <td>
+                    <form method="post" style="display:inline;">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="remove">
+                        <input type="hidden" name="receita_id" value="{{ r.id }}">
+                        <button type="submit" class="btn-danger btn-sm" onclick="return confirm('Remover {{ r.ingrediente.nome }} da receita?');">Remover</button>
+                    </form>
+                </td>
             </tr>
             {% endfor %}
         </tbody>

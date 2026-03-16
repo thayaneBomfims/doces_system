@@ -32,7 +32,13 @@
                 <td>{% if p.forma_pagamento %}{{ p.forma_pagamento }}{% else %}<span style="color:#9ca3af;">-</span>{% endif %}</td>
                 <td style="font-weight:700;">R$ {{ p.total_com_entrega|floatformat:2 }}</td>
                 <td><span class="badge {{ p.status_badge_class }}">{{ p.status }}</span></td>
-                <td><a href="/pedidos/{{ p.id }}/" class="btn btn-ghost btn-sm">Ver</a></td>
+                <td style="display:flex; gap:6px; align-items:center;">
+                    <a href="/pedidos/{{ p.id }}/" class="btn btn-ghost btn-sm">Ver</a>
+                    <form method="post" action="/pedidos/{{ p.id }}/excluir/" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-danger btn-sm" onclick="return confirm('Excluir pedido #{{ p.id }}?');">Excluir</button>
+                    </form>
+                </td>
             </tr>
             {% endfor %}
         </tbody>

@@ -61,7 +61,7 @@
         <tbody>
             {% for item in pedido.itempedido_set.all %}
             <tr>
-                <td><strong>{{ item.produto.nome }}</strong></td>
+                <td><strong>{{ item.nome_produto }}</strong></td>
                 <td>{{ item.quantidade }}</td>
                 <td>R$ {{ item.subtotal|floatformat:2 }}</td>
             </tr>
